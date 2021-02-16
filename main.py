@@ -1,11 +1,12 @@
 import time
-import viriables
 from influxdb import InfluxDBClient
 from datetime import datetime
 from zabbix import Zabbix
+from variables import INFLUX_HOSTNAME, INFLUX_DATABASE
 
 
-def counter_triggers_ovpn():
+def get_triggers():
+    """Get all triggers on Zabbix"""
     zabbix = Zabbix()
     all_triggers = list()
     for trigger in zabbix.triggered():
@@ -13,39 +14,56 @@ def counter_triggers_ovpn():
     return all_triggers
 
 
-def influx_send_metrics(metrics):
+def influx_send_metrics(metrics_hardware, metrics_ovpn):
     """Connecting to the influxDB"""
-    client = InfluxDBClient(host=viriables.INFLUX_HOSTNAME, port=8086)
-    client.create_database(viriables.INFLUX_DATABASE)
-    client.switch_database(viriables.INFLUX_DATABASE)
-    client.alter_retention_policy(name='autogen', duration='7d', database=viriables.INFLUX_DATABASE, default=False,
+    client = InfluxDBClient(host=INFLUX_HOSTNAME, port=8086)
+    client.create_database(INFLUX_DATABASE)
+    client.switch_database(INFLUX_DATABASE)
+    client.alter_retention_policy(name='autogen', duration='7d', database=INFLUX_DATABASE, default=False,
                                   shard_duration='7d')
     current_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    add_metrics = [
+    add_metrics_hardware = [
         {
             'measurement': 'Trigger',
             'tags': {
-                'Trigger': 'Статус тунеля OVPN'
+                'Trigger': 'Системный блок - Down'
             },
             'time': current_time,
             'fields': {
-                  "Metric": metrics
+                  "Metric": metrics_hardware
+            }
+        }
+    ]
+    add_metrics_ovpn = [
+        {
+            'measurement': 'Trigger',
+            'tags': {
+                'Trigger': 'Статус туннеля OVPN'
+            },
+            'time': current_time,
+            'fields': {
+                "Metric": metrics_ovpn
             }
         }
     ]
     try:
-        print(f'Write metrics: {metrics}')
-        client.write_points(add_metrics)
+        client.write_points(add_metrics_hardware)
+        print(f'Write metrics: {add_metrics_hardware}')
+        client.write_points(add_metrics_ovpn)
+        print(f'Write metrics: {add_metrics_ovpn}')
     except ConnectionError:
         time.sleep(300)
         pass
 
 
 while True:
-    counter_vpn = 0
-    metric = counter_triggers_ovpn()
+    counter_triggers_hardware = 0
+    counter_triggers_ovpn = 0
+    metric = get_triggers()
     for i in metric:
+        if i == "Системный блок - Down (0)":
+            counter_triggers_hardware += 1
         if i == "Статус туннеля VPN":
-            counter_vpn += 1
-    influx_send_metrics(counter_vpn)
+            counter_triggers_ovpn += 1
+    influx_send_metrics(counter_triggers_hardware, counter_triggers_ovpn)
     time.sleep(5)
