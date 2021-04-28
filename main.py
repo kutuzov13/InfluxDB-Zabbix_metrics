@@ -35,16 +35,15 @@ def influx_send_metrics(metrics_name, metrics_value):
         {
             'measurement': f'{metrics_name}',
             'tags': {
-                'Name': metrics_name
+                'Name': metrics_name,
             },
             'time': current_time,
             'fields': {
-                "Value": metrics_value
-            }
-        }
+                "Value": metrics_value,
+            },
+        },
     ]
     try:
         client.write_points(add_metrics_hardware)
     except ConnectionError:
         time.sleep(300)
-        pass
